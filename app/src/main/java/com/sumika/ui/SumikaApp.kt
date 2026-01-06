@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +24,7 @@ import com.sumika.ui.screens.SettingsScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Home : Screen("home", "ホーム", Icons.Default.Home)
-    data object Focus : Screen("focus", "集中", Icons.Outlined.Timer)
+    data object Focus : Screen("focus", "集中", Icons.Default.PlayArrow)
     data object Settings : Screen("settings", "設定", Icons.Default.Settings)
 }
 
