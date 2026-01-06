@@ -10,14 +10,21 @@ import android.view.SurfaceHolder
 import com.sumika.wallpaper.engine.FrameScheduler
 import com.sumika.wallpaper.engine.OffsetManager
 import com.sumika.wallpaper.engine.RenderThread
+import com.sumika.wallpaper.engine.SurfaceLifecycleManager
 import com.sumika.wallpaper.engine.TouchEvent
 import com.sumika.wallpaper.engine.TouchHandler
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Sumika ライブ壁紙サービス
  * 
  * 描画は専用スレッド（RenderThread）で行い、メインスレッドをブロックしない。
  * FPSは状態に応じて動的に切り替える（Active:60fps, Idle:30fps, Sleep:10fps）。
+ * 
+ * 安全性:
+ * - Surfaceライフサイクル管理で描画可否を厳密に判定
+ * - lockCanvas失敗時の例外を適切にハンドル
+ * - 可視/不可視の連打で二重起動しない
  */
 class SumikaWallpaperService : WallpaperService() {
     
@@ -32,29 +39,36 @@ class SumikaWallpaperService : WallpaperService() {
      */
     inner class SumikaEngine : Engine() {
         
-        private val renderThread = RenderThread()
+        private var renderThread: RenderThread? = null
         private val scheduler = FrameScheduler()
         private val offsetManager = OffsetManager()
+        private val lifecycleManager = SurfaceLifecycleManager()
         
-        private var visible = false
-        private var surfaceReady = false
-        private var screenWidth = 0
-        private var screenHeight = 0
+        // 二重起動防止フラグ
+        private val isDrawLoopRunning = AtomicBoolean(false)
         
-        // 仮のペット位置（画面比率 0.0-1.0）
-        private var petX = 0.5f
-        private var petY = 0.7f
+        // 仮のペット位置（ワールド座標 0.0-1.0）
+        private var petWorldX = 0.5f
+        private var petWorldY = 0.7f
+        
+        // 寝床位置（ワールド座標）
+        private val nestWorldX = 0.85f
+        private val nestWorldY = 0.85f
         
         // タッチエフェクト用
         private var showHeart = false
-        private var heartX = 0f
-        private var heartY = 0f
+        private var heartScreenX = 0f
+        private var heartScreenY = 0f
         private var heartAlpha = 0f
         
         // 描画用Paint
         private val petPaint = Paint().apply {
             isAntiAlias = true
             color = Color.WHITE
+        }
+        private val nestPaint = Paint().apply {
+            isAntiAlias = true
+            color = 0xFF4A4A6A.toInt()
         }
         private val heartPaint = Paint().apply {
             isAntiAlias = true
@@ -64,7 +78,7 @@ class SumikaWallpaperService : WallpaperService() {
         }
         private val debugPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 32f
+            textSize = 28f
             isAntiAlias = true
         }
         
@@ -74,33 +88,39 @@ class SumikaWallpaperService : WallpaperService() {
         
         private val drawRunnable = object : Runnable {
             override fun run() {
-                if (!visible || !surfaceReady) return
+                if (!lifecycleManager.canDraw) {
+                    Log.d(TAG, "Draw loop stopping: canDraw=false")
+                    isDrawLoopRunning.set(false)
+                    return
+                }
                 
                 // タイムアウトチェック（ACTIVE → IDLE）
                 scheduler.checkActiveTimeout()
                 
                 // 描画実行
-                draw()
+                performDraw()
                 
                 // 次フレームをスケジュール
-                renderThread.postDelayed(this, scheduler.frameIntervalMs)
+                renderThread?.postDelayed(this, scheduler.frameIntervalMs)
             }
         }
         
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             setTouchEventsEnabled(true)
-            renderThread.start()
-            // Looperの準備を待つ
-            renderThread.looper
-            Log.d(TAG, "Engine created")
+            
+            // RenderThreadを起動
+            renderThread = RenderThread().apply {
+                start()
+                looper // Looper準備を待つ
+            }
+            Log.i(TAG, "Engine created, RenderThread started")
         }
         
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
-            surfaceReady = true
-            Log.d(TAG, "Surface created")
-            startDrawingIfReady()
+            lifecycleManager.onSurfaceCreated()
+            tryStartDrawLoop()
         }
         
         override fun onSurfaceChanged(
@@ -110,27 +130,23 @@ class SumikaWallpaperService : WallpaperService() {
             height: Int
         ) {
             super.onSurfaceChanged(holder, format, width, height)
-            screenWidth = width
-            screenHeight = height
-            Log.d(TAG, "Surface changed: ${width}x${height}")
+            lifecycleManager.onSurfaceChanged(width, height)
         }
         
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
-            surfaceReady = false
-            stopDrawing()
+            lifecycleManager.onSurfaceDestroyed()
+            stopDrawLoop()
             super.onSurfaceDestroyed(holder)
-            Log.d(TAG, "Surface destroyed")
         }
         
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
-            this.visible = visible
-            Log.d(TAG, "Visibility changed: $visible")
+            lifecycleManager.onVisibilityChanged(visible)
             
             if (visible) {
-                startDrawingIfReady()
+                tryStartDrawLoop()
             } else {
-                stopDrawing()
+                stopDrawLoop()
             }
         }
         
@@ -153,20 +169,26 @@ class SumikaWallpaperService : WallpaperService() {
         }
         
         override fun onDestroy() {
-            stopDrawing()
-            renderThread.shutdown()
+            Log.i(TAG, "Engine destroying...")
+            stopDrawLoop()
+            lifecycleManager.reset()
+            renderThread?.shutdown()
+            renderThread = null
             super.onDestroy()
-            Log.d(TAG, "Engine destroyed")
+            Log.i(TAG, "Engine destroyed")
         }
         
         private fun handleTouchEvent(event: TouchEvent) {
+            val screenWidth = lifecycleManager.screenWidth
+            val screenHeight = lifecycleManager.screenHeight
+            
             when (event) {
                 is TouchEvent.Tap -> {
                     Log.d(TAG, "Tap at (${event.x}, ${event.y})")
                     // ♡エフェクト表示
                     showHeart = true
-                    heartX = event.x
-                    heartY = event.y
+                    heartScreenX = event.x
+                    heartScreenY = event.y
                     heartAlpha = 1f
                 }
                 is TouchEvent.LongPress -> {
@@ -178,54 +200,88 @@ class SumikaWallpaperService : WallpaperService() {
                     // TODO: 遊ぶエフェクト
                 }
                 is TouchEvent.Swipe -> {
-                    Log.d(TAG, "Swipe from (${event.startX}, ${event.startY}) to (${event.endX}, ${event.endY})")
-                    // ペットを誘導移動
-                    petX = (event.endX / screenWidth).coerceIn(0.1f, 0.9f)
-                    petY = (event.endY / screenHeight).coerceIn(0.1f, 0.9f)
+                    Log.d(TAG, "Swipe to (${event.endX}, ${event.endY})")
+                    // ペットを誘導移動（ワールド座標に変換）
+                    if (screenWidth > 0 && screenHeight > 0) {
+                        petWorldX = offsetManager.toWorldX(event.endX, screenWidth)
+                            .coerceIn(0.1f, 0.9f)
+                        petWorldY = offsetManager.toWorldY(event.endY, screenHeight)
+                            .coerceIn(0.1f, 0.9f)
+                    }
                 }
             }
         }
         
-        private fun startDrawingIfReady() {
-            if (visible && surfaceReady) {
-                scheduler.resetTime()
-                renderThread.removeCallbacks(drawRunnable)
-                renderThread.post(drawRunnable)
-                Log.d(TAG, "Drawing started")
+        /**
+         * 描画ループの開始を試行（二重起動防止）
+         */
+        private fun tryStartDrawLoop() {
+            if (!lifecycleManager.canDraw) {
+                Log.d(TAG, "Cannot start draw loop: canDraw=false")
+                return
             }
-        }
-        
-        private fun stopDrawing() {
-            renderThread.removeCallbacks(drawRunnable)
+            
+            if (!isDrawLoopRunning.compareAndSet(false, true)) {
+                Log.d(TAG, "Draw loop already running, skip")
+                return
+            }
+            
             scheduler.resetTime()
-            Log.d(TAG, "Drawing stopped")
+            renderThread?.removeCallbacks(drawRunnable)
+            renderThread?.post(drawRunnable)
+            Log.i(TAG, "Draw loop started (state=${lifecycleManager.currentState})")
         }
         
-        private fun draw() {
-            val dt = scheduler.calculateDeltaTime()
-            
-            // 状態更新
-            update(dt)
-            
-            // 描画
-            val holder = surfaceHolder ?: return
-            val canvas: Canvas? = try {
-                holder.lockCanvas()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to lock canvas: ${e.message}")
-                null
+        /**
+         * 描画ループを停止
+         */
+        private fun stopDrawLoop() {
+            renderThread?.removeCallbacks(drawRunnable)
+            isDrawLoopRunning.set(false)
+            scheduler.resetTime()
+            Log.i(TAG, "Draw loop stopped")
+        }
+        
+        /**
+         * 実際の描画処理
+         */
+        private fun performDraw() {
+            if (!lifecycleManager.tryStartDrawing()) {
+                return
             }
-            
-            canvas ?: return
             
             try {
-                render(canvas, dt)
-            } finally {
-                try {
-                    holder.unlockCanvasAndPost(canvas)
+                val dt = scheduler.calculateDeltaTime()
+                update(dt)
+                
+                val holder = surfaceHolder ?: return
+                val canvas: Canvas? = try {
+                    holder.lockCanvas()
+                } catch (e: IllegalStateException) {
+                    Log.w(TAG, "lockCanvas failed (Surface not valid): ${e.message}")
+                    null
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to unlock canvas: ${e.message}")
+                    Log.w(TAG, "lockCanvas failed: ${e.message}")
+                    null
                 }
+                
+                if (canvas == null) {
+                    return
+                }
+                
+                try {
+                    render(canvas, dt)
+                } finally {
+                    try {
+                        holder.unlockCanvasAndPost(canvas)
+                    } catch (e: IllegalStateException) {
+                        Log.w(TAG, "unlockCanvas failed (Surface destroyed): ${e.message}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "unlockCanvas failed: ${e.message}")
+                    }
+                }
+            } finally {
+                lifecycleManager.finishDrawing()
             }
         }
         
@@ -241,36 +297,41 @@ class SumikaWallpaperService : WallpaperService() {
         }
         
         private fun render(canvas: Canvas, dt: Float) {
+            val screenWidth = lifecycleManager.screenWidth
+            val screenHeight = lifecycleManager.screenHeight
+            
             // 背景
             canvas.drawColor(0xFF1A1A2E.toInt())
             
+            // 寝床描画
+            val nestScreenX = offsetManager.toScreenX(nestWorldX, screenWidth)
+            val nestScreenY = offsetManager.toScreenY(nestWorldY, screenHeight)
+            val nestRadius = screenWidth * 0.06f
+            canvas.drawCircle(nestScreenX, nestScreenY, nestRadius, nestPaint)
+            
             // ペット描画（仮：白い円）
-            val petScreenX = offsetManager.toScreenX(petX, screenWidth)
-            val petScreenY = offsetManager.toScreenY(petY, screenHeight)
+            val petScreenX = offsetManager.toScreenX(petWorldX, screenWidth)
+            val petScreenY = offsetManager.toScreenY(petWorldY, screenHeight)
             val petRadius = screenWidth * 0.08f
             canvas.drawCircle(petScreenX, petScreenY, petRadius, petPaint)
-            
-            // 寝床描画（仮：右下に小さい円）
-            val nestX = offsetManager.toScreenX(0.85f, screenWidth)
-            val nestY = offsetManager.toScreenY(0.85f, screenHeight)
-            val nestPaint = Paint().apply {
-                color = 0xFF4A4A6A.toInt()
-                isAntiAlias = true
-            }
-            canvas.drawCircle(nestX, nestY, petRadius * 0.8f, nestPaint)
             
             // ハートエフェクト
             if (showHeart) {
                 heartPaint.alpha = (heartAlpha * 255).toInt()
-                canvas.drawText("♡", heartX, heartY - 50, heartPaint)
+                canvas.drawText("♡", heartScreenX, heartScreenY - 50, heartPaint)
             }
             
             // デバッグ情報
             val fps = if (scheduler.frameIntervalMs > 0) 1000 / scheduler.frameIntervalMs else 0
+            val debugInfo = buildString {
+                append("FPS: $fps (${scheduler.currentState})")
+                append(" | Offset: %.2f".format(offsetManager.xOffset))
+                append(" | Pages: ${offsetManager.estimatedPageCount}")
+            }
+            canvas.drawText(debugInfo, 20f, 50f, debugPaint)
             canvas.drawText(
-                "FPS: $fps (${scheduler.currentState})",
-                20f, 60f,
-                debugPaint
+                "Surface: ${lifecycleManager.currentState} | Pet: (%.2f, %.2f)".format(petWorldX, petWorldY),
+                20f, 80f, debugPaint
             )
         }
     }
