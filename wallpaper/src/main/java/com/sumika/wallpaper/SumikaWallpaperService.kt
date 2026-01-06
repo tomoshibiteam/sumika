@@ -12,15 +12,20 @@ import com.sumika.core.animation.AnimationController
 import com.sumika.core.animation.AnimationState
 import com.sumika.core.animation.PetBehavior
 import com.sumika.core.model.PetType
+import com.sumika.core.rhythm.DayNightCycle
+import com.sumika.core.rhythm.TimeOfDay
 import com.sumika.wallpaper.engine.FrameScheduler
 import com.sumika.wallpaper.engine.OffsetManager
 import com.sumika.wallpaper.engine.RenderThread
 import com.sumika.wallpaper.engine.SurfaceLifecycleManager
 import com.sumika.wallpaper.engine.TouchEvent
 import com.sumika.wallpaper.engine.TouchHandler
+import com.sumika.wallpaper.renderer.BackgroundRenderer
 import com.sumika.wallpaper.renderer.EffectRenderer
+import com.sumika.wallpaper.renderer.NestRenderer
 import com.sumika.wallpaper.renderer.PetRenderer
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sqrt
 
 /**
  * Sumika ライブ壁紙サービス
@@ -40,6 +45,9 @@ class SumikaWallpaperService : WallpaperService() {
         private val offsetManager = OffsetManager()
         private val lifecycleManager = SurfaceLifecycleManager()
         
+        // 日内リズム
+        private val dayNightCycle = DayNightCycle()
+        
         // アニメーション＆行動
         private val animationController = AnimationController()
         private val petBehavior = PetBehavior(animationController)
@@ -47,6 +55,8 @@ class SumikaWallpaperService : WallpaperService() {
         // レンダラー
         private var petRenderer: PetRenderer? = null
         private val effectRenderer = EffectRenderer()
+        private val nestRenderer = NestRenderer()
+        private val backgroundRenderer = BackgroundRenderer()
         
         // 二重起動防止フラグ
         private val isDrawLoopRunning = AtomicBoolean(false)
@@ -55,22 +65,14 @@ class SumikaWallpaperService : WallpaperService() {
         private var petType = PetType.CAT
         private var petVariation = 0
         
-        // 寝床位置（ワールド座標）
-        private val nestWorldX = 0.85f
-        private val nestWorldY = 0.85f
+        // 寝床帰宅中フラグ
+        private var isGoingToNest = false
+        private var lastRhythmCheck = 0L
         
         // 描画用Paint
-        private val nestPaint = Paint().apply {
-            isAntiAlias = true
-            color = 0xFF4A4A6A.toInt()
-        }
-        private val nestInnerPaint = Paint().apply {
-            isAntiAlias = true
-            color = 0xFF3A3A5A.toInt()
-        }
         private val debugPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 24f
+            textSize = 22f
             isAntiAlias = true
             setShadowLayer(2f, 1f, 1f, Color.BLACK)
         }
@@ -154,6 +156,7 @@ class SumikaWallpaperService : WallpaperService() {
             lifecycleManager.reset()
             petRenderer?.release()
             petRenderer = null
+            backgroundRenderer.release()
             renderThread?.shutdown()
             renderThread = null
             super.onDestroy()
@@ -164,28 +167,34 @@ class SumikaWallpaperService : WallpaperService() {
             val screenWidth = lifecycleManager.screenWidth
             val screenHeight = lifecycleManager.screenHeight
             
+            // 寝ている時はタップで起こす
+            if (animationController.state == AnimationState.SLEEP) {
+                if (event is TouchEvent.Tap || event is TouchEvent.DoubleTap) {
+                    petBehavior.wakeUp()
+                    isGoingToNest = false
+                    return
+                }
+            }
+            
             when (event) {
                 is TouchEvent.Tap -> {
-                    Log.d(TAG, "Tap - Pet")
                     petBehavior.onPet()
                     effectRenderer.addHeartEffect(event.x, event.y)
                 }
                 is TouchEvent.LongPress -> {
-                    Log.d(TAG, "LongPress - Feed")
                     petBehavior.onFeed()
                     effectRenderer.addFoodEffect(event.x, event.y)
                 }
                 is TouchEvent.DoubleTap -> {
-                    Log.d(TAG, "DoubleTap - Play")
                     petBehavior.onPlay()
                     effectRenderer.addPlayEffect(event.x, event.y)
                 }
                 is TouchEvent.Swipe -> {
-                    Log.d(TAG, "Swipe - MoveTo")
                     if (screenWidth > 0 && screenHeight > 0) {
                         val worldX = offsetManager.toWorldX(event.endX, screenWidth)
                         val worldY = offsetManager.toWorldY(event.endY, screenHeight)
                         petBehavior.moveTo(worldX, worldY)
+                        isGoingToNest = false  // 手動移動で帰宅キャンセル
                     }
                 }
             }
@@ -215,8 +224,20 @@ class SumikaWallpaperService : WallpaperService() {
                 val dt = scheduler.calculateDeltaTime()
                 val currentTimeMs = SystemClock.elapsedRealtime()
                 
+                // 日内リズムチェック（1秒ごと）
+                if (currentTimeMs - lastRhythmCheck > 1000) {
+                    lastRhythmCheck = currentTimeMs
+                    checkDayNightRhythm()
+                }
+                
                 // 更新
                 petBehavior.update(dt, currentTimeMs)
+                
+                // 寝床に到着したら寝る
+                if (isGoingToNest && isNearNest()) {
+                    petBehavior.sleep()
+                    isGoingToNest = false
+                }
                 
                 // スリープ時はFPS下げる
                 if (animationController.state == AnimationState.SLEEP) {
@@ -250,15 +271,46 @@ class SumikaWallpaperService : WallpaperService() {
             }
         }
         
+        /**
+         * 日内リズムチェック
+         */
+        private fun checkDayNightRhythm() {
+            val shouldSleep = dayNightCycle.shouldGoToNest()
+            val isSleeping = animationController.state == AnimationState.SLEEP
+            
+            if (shouldSleep && !isSleeping && !isGoingToNest) {
+                // 寝床へ向かう
+                isGoingToNest = true
+                petBehavior.moveTo(nestRenderer.nestX, nestRenderer.nestY)
+                Log.d(TAG, "Going to nest (time: ${dayNightCycle.getCurrentHour()}:00)")
+            } else if (!shouldSleep && isSleeping && dayNightCycle.shouldBeAwake()) {
+                // 起きる時間
+                petBehavior.wakeUp()
+                Log.d(TAG, "Waking up (time: ${dayNightCycle.getCurrentHour()}:00)")
+            }
+        }
+        
+        /**
+         * 寝床の近くにいるか
+         */
+        private fun isNearNest(): Boolean {
+            val dx = petBehavior.posX - nestRenderer.nestX
+            val dy = petBehavior.posY - nestRenderer.nestY
+            return sqrt(dx * dx + dy * dy) < 0.05f
+        }
+        
         private fun render(canvas: Canvas) {
             val screenWidth = lifecycleManager.screenWidth
             val screenHeight = lifecycleManager.screenHeight
             
             // 背景
-            canvas.drawColor(0xFF1A1A2E.toInt())
+            backgroundRenderer.draw(canvas, screenWidth, screenHeight)
             
             // 寝床描画
-            drawNest(canvas, screenWidth, screenHeight)
+            val nestScreenX = offsetManager.toScreenX(nestRenderer.nestX, screenWidth)
+            val nestScreenY = offsetManager.toScreenY(nestRenderer.nestY, screenHeight)
+            val isPetSleeping = animationController.state == AnimationState.SLEEP
+            nestRenderer.draw(canvas, nestScreenX, nestScreenY, screenWidth, isPetSleeping)
             
             // ペット描画
             val petScreenX = offsetManager.toScreenX(petBehavior.posX, screenWidth)
@@ -281,30 +333,20 @@ class SumikaWallpaperService : WallpaperService() {
             drawDebugInfo(canvas)
         }
         
-        private fun drawNest(canvas: Canvas, screenWidth: Int, screenHeight: Int) {
-            val nestScreenX = offsetManager.toScreenX(nestWorldX, screenWidth)
-            val nestScreenY = offsetManager.toScreenY(nestWorldY, screenHeight)
-            val nestRadius = screenWidth * 0.08f
-            
-            // 外側
-            canvas.drawCircle(nestScreenX, nestScreenY, nestRadius, nestPaint)
-            // 内側（くぼみ）
-            canvas.drawCircle(nestScreenX, nestScreenY, nestRadius * 0.7f, nestInnerPaint)
-        }
-        
         private fun drawDebugInfo(canvas: Canvas) {
             val fps = if (scheduler.frameIntervalMs > 0) 1000 / scheduler.frameIntervalMs else 0
+            val timeOfDay = dayNightCycle.getCurrentTimeOfDay()
+            val hour = dayNightCycle.getCurrentHour()
+            
             val lines = listOf(
-                "FPS: $fps (${scheduler.currentState})",
-                "Anim: ${animationController.state} F${animationController.frame}",
-                "Pet: (%.2f, %.2f) %s".format(
-                    petBehavior.posX, petBehavior.posY,
-                    if (petBehavior.facingRight) "→" else "←"
-                )
+                "FPS: $fps | ${scheduler.currentState}",
+                "Time: $hour:00 ($timeOfDay)",
+                "Anim: ${animationController.state}",
+                "Pet: (%.2f, %.2f)".format(petBehavior.posX, petBehavior.posY)
             )
             
             lines.forEachIndexed { index, text ->
-                canvas.drawText(text, 16f, 40f + index * 28f, debugPaint)
+                canvas.drawText(text, 16f, 36f + index * 26f, debugPaint)
             }
         }
     }
