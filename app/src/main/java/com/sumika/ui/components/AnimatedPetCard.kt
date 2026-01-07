@@ -337,11 +337,13 @@ private fun getEmoji(type: PetType, behavior: Int, blink: Boolean): String {
             PetType.CAT -> "😸"
             PetType.DOG -> "🐶"
             PetType.BIRD -> "🐤"
+            PetType.RABBIT -> "🐰"
         }
         else -> when (type) {
             PetType.CAT -> "🐱"
             PetType.DOG -> "🐕"
             PetType.BIRD -> "🐦"
+            PetType.RABBIT -> "🐇"
         }
     }
 }

@@ -24,6 +24,11 @@ class WallpaperStateSync(context: Context) {
     val petVariationFlow: Flow<Int> = repository.petVariationFlow
     
     /**
+     * アクティブペットID
+     */
+    val activePetIdFlow: Flow<String?> = repository.activePetIdFlow
+    
+    /**
      * ペット名
      */
     val petNameFlow: Flow<String> = repository.petNameFlow

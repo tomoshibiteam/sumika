@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sumika.core.data.PetStateRepository
 import com.sumika.core.model.GrowthStage
+import com.sumika.core.model.PetCatalog
 import com.sumika.core.model.PetType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import android.util.Log
 import javax.inject.Inject
 
 data class HomeState(
@@ -36,60 +38,40 @@ class HomeViewModel @Inject constructor(
     val state: StateFlow<HomeState> = _state.asStateFlow()
     
     init {
+        // アクティブペットIDからペット情報を取得
         viewModelScope.launch {
             combine(
-                repository.petTypeFlow,
-                repository.petVariationFlow,
-                repository.petNameFlow,
+                repository.activePetIdFlow,
                 repository.growthStageFlow,
-                repository.growthXpFlow
-            ) { type, variation, name, stage, xp ->
+                repository.growthXpFlow,
+                repository.totalFocusMinutesFlow,
+                repository.focusSessionsCountFlow
+            ) { activePetId, stage, xp, focusMinutes, sessionCount ->
+                // activePetIdからカタログ情報を取得
+                Log.d("HomeViewModel", "activePetId: $activePetId")
+                val petEntry = activePetId?.let { PetCatalog.findById(it) }
+                Log.d("HomeViewModel", "petEntry: ${petEntry?.defaultName} (${petEntry?.type})")
+                
                 val xpToNext = when (stage) {
                     GrowthStage.BABY -> 500
                     GrowthStage.TEEN -> 2000
                     GrowthStage.ADULT -> Int.MAX_VALUE
                 }
+                
                 HomeState(
-                    petType = type,
-                    petVariation = variation,
-                    petName = name,
+                    petType = petEntry?.type ?: PetType.CAT,
+                    petVariation = petEntry?.variation ?: 0,
+                    petName = petEntry?.defaultName ?: "ペット",
                     growthStage = stage,
                     growthXp = xp,
-                    xpToNextStage = xpToNext
+                    xpToNextStage = xpToNext,
+                    totalFocusMinutes = focusMinutes,
+                    focusSessionsCount = sessionCount
                 )
-            }.collect { combined ->
-                _state.value = combined
+            }.collect { newState ->
+                Log.d("HomeViewModel", "New state: ${newState.petName} (${newState.petType})") 
+                _state.value = newState
             }
-        }
-        
-        viewModelScope.launch {
-            repository.totalFocusMinutesFlow.collect { minutes ->
-                _state.value = _state.value.copy(totalFocusMinutes = minutes)
-            }
-        }
-        
-        viewModelScope.launch {
-            repository.focusSessionsCountFlow.collect { count ->
-                _state.value = _state.value.copy(focusSessionsCount = count)
-            }
-        }
-    }
-    
-    fun setPetType(type: PetType) {
-        viewModelScope.launch {
-            repository.setPetType(type)
-        }
-    }
-    
-    fun setPetVariation(variation: Int) {
-        viewModelScope.launch {
-            repository.setPetVariation(variation)
-        }
-    }
-    
-    fun setPetName(name: String) {
-        viewModelScope.launch {
-            repository.setPetName(name)
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,12 +18,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.sumika.ui.viewmodel.AuthViewModel
 import com.sumika.wallpaper.SumikaWallpaperService
 
 @Composable
-fun SettingsScreen(onNavigateToCalibration: () -> Unit) {
+fun SettingsScreen(
+    onNavigateToCalibration: () -> Unit,
+    onLogout: () -> Unit,
+    authViewModel: AuthViewModel = hiltViewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val authState by authViewModel.state.collectAsState()
     
     Column(
         modifier = Modifier
@@ -37,6 +45,68 @@ fun SettingsScreen(onNavigateToCalibration: () -> Unit) {
         )
         
         Spacer(modifier = Modifier.height(24.dp))
+        
+        // ユーザー情報セクション
+        authState.user?.let { user ->
+            SettingsSection(title = "アカウント") {
+                // ユーザー情報表示
+                Surface(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = user.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = user.email,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // ログアウトボタン
+                Surface(
+                    onClick = onLogout,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "ログアウト",
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "ログアウト",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+        }
         
         // 壁紙設定セクション
         SettingsSection(title = "壁紙") {

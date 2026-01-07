@@ -2,37 +2,80 @@ package com.sumika.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary colors
-val Primary = Color(0xFF6B5CE7)
-val PrimaryVariant = Color(0xFF5448C8)
+// ========================================
+// PREMIUM COLOR PALETTE
+// ========================================
+
+// Primary: Deep Purple to Fuchsia gradient
+val Primary = Color(0xFF7C3AED)
+val PrimaryLight = Color(0xFF9F67FF)
+val PrimaryDark = Color(0xFF6D28D9)
 val OnPrimary = Color.White
 
-// Secondary colors
-val Secondary = Color(0xFFFF6B9D)
-val SecondaryVariant = Color(0xFFE85A8A)
+// Secondary: Pink to Orange gradient
+val Secondary = Color(0xFFEC4899)
+val SecondaryLight = Color(0xFFF472B6)
+val SecondaryDark = Color(0xFFDB2777)
 val OnSecondary = Color.White
 
-// Background colors
-val Background = Color(0xFF1A1A2E)
-val BackgroundLight = Color(0xFFF5F5F7)
-val Surface = Color(0xFF25253D)
+// Accent: Cyan
+val Accent = Color(0xFF06B6D4)
+val AccentLight = Color(0xFF22D3EE)
+val AccentDark = Color(0xFF0891B2)
+val OnAccent = Color.White
+
+// Background & Surface (Light Mode)
+val BackgroundLight = Color(0xFFFAFAF9)
 val SurfaceLight = Color.White
-val OnBackground = Color.White
-val OnBackgroundLight = Color(0xFF1A1A2E)
-val OnSurface = Color.White
-val OnSurfaceLight = Color(0xFF1A1A2E)
+val SurfaceVariantLight = Color(0xFFF5F5F4)
+val OnBackgroundLight = Color(0xFF27272A)
+val OnSurfaceLight = Color(0xFF27272A)
+val OnSurfaceVariantLight = Color(0xFF52525B)
 
-// Accent colors
-val Accent = Color(0xFF00D9FF)
-val Heart = Color(0xFFFF6B6B)
-val Success = Color(0xFF4ADE80)
-val Warning = Color(0xFFFBBF24)
+// Background & Surface (Dark Mode)
+val BackgroundDark = Color(0xFF18181B)
+val SurfaceDark = Color(0xFF27272A)
+val SurfaceVariantDark = Color(0xFF3F3F46)
+val OnBackgroundDark = Color(0xFFFAFAFA)
+val OnSurfaceDark = Color(0xFFFAFAFA)
+val OnSurfaceVariantDark = Color(0xFFA1A1AA)
 
-// Gradient colors
-val GradientStart = Color(0xFF6B5CE7)
-val GradientEnd = Color(0xFFFF6B9D)
-val GradientAccent = Color(0xFF00D9FF)
+// Semantic Colors
+val Success = Color(0xFF10B981)
+val SuccessLight = Color(0xFF34D399)
+val SuccessDark = Color(0xFF059669)
 
-// Glass surface
-val GlassSurface = Color(0x33FFFFFF)
-val GlassSurfaceDark = Color(0x22FFFFFF)
+val Warning = Color(0xFFF59E0B)
+val WarningLight = Color(0xFFFBBF24)
+val WarningDark = Color(0xFFD97706)
+
+val Error = Color(0xFFEF4444)
+val ErrorLight = Color(0xFFF87171)
+val ErrorDark = Color(0xFFDC2626)
+
+// Gradient Colors
+val GradientStart = Color(0xFF7C3AED)
+val GradientMiddle = Color(0xFFEC4899)
+val GradientEnd = Color(0xFFF97316)
+
+val GradientStartLight = Color(0xFF9F67FF)
+val GradientEndLight = Color(0xFFFCA5A5)
+
+// Glass Morphism
+val GlassSurface = Color(0x1AFFFFFF) // 10% white
+val GlassHighlight = Color(0x33FFFFFF) // 20% white
+val GlassBorder = Color(0x2EFFFFFF) // 18% white
+val GlassShadow = Color(0x40000000) // 25% black
+
+// Overlay
+val Overlay = Color(0x80000000) // 50% black
+val OverlayLight = Color(0x40000000) // 25% black
+
+// Special Effects
+val Shimmer = Color(0x80FFFFFF) // 50% white for shimmer effect
+val Glow = Color(0xFFFFD700) // Gold glow
+
+// Legacy compatibility
+val GlassSurfaceDark = GlassSurface
+val GradientAccent = Accent
+val Heart = Error

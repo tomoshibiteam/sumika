@@ -133,6 +133,23 @@ class PetRenderer(private val context: Context) {
                     AnimationState.WALK to (1 to 2)
                 )
             }
+            PetType.RABBIT -> {
+                resourceId = R.drawable.pet_rabbit_walk_sprite
+                gridCols = 4  // 4列
+                gridRows = 2  // 2行
+                frameIntervalMs = 120L  // 速めのアニメーション
+                animationMap = mutableMapOf(
+                    AnimationState.IDLE to (0 to 1),     // 最初のフレーム
+                    AnimationState.WALK to (0 to 8),     // 8フレーム全て使用
+                    AnimationState.RUN to (0 to 8),      // 走りも歩きと同じ
+                    AnimationState.SIT to (0 to 1),
+                    AnimationState.SLEEP to (0 to 1),
+                    AnimationState.HAPPY to (0 to 8),
+                    AnimationState.PLAY to (0 to 8),
+                    AnimationState.FOCUS to (0 to 1),
+                    AnimationState.LEVEL_UP to (0 to 8)
+                )
+            }
         }
         
         try {
@@ -258,6 +275,18 @@ class PetRenderer(private val context: Context) {
                     5 -> srcRect.set((1 + frameIndex) * cellWidth, cellHeight, (2 + frameIndex) * cellWidth, 2 * cellHeight) // 2行目の2,3,4枚目
                 }
             }
+            PetType.RABBIT -> {
+                // ウサギは4x2グリッド、8フレームの歩行アニメーション
+                // rowIndex 0 = 全8フレーム (4列x2行)
+                val col = frameIndex % 4
+                val row = frameIndex / 4
+                srcRect.set(
+                    col * cellWidth,
+                    row * cellHeight,
+                    (col + 1) * cellWidth,
+                    (row + 1) * cellHeight
+                )
+            }
             else -> {
                 srcRect.set(0, 0, cellWidth, cellHeight)
             }
@@ -303,6 +332,7 @@ class PetRenderer(private val context: Context) {
             PetType.CAT -> 0xFFE8A87C.toInt()
             PetType.DOG -> 0xFFC4956A.toInt()
             PetType.BIRD -> 0xFFFFD93D.toInt()
+            PetType.RABBIT -> 0xFFFFB6C1.toInt() // Light pink for rabbit
             else -> 0xFFCCCCCC.toInt()
         }
         paint.style = Paint.Style.FILL

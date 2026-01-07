@@ -81,39 +81,34 @@ class PetStateObserver(context: Context) {
         
         Log.i(TAG, "Starting pet state observation")
         
-        // ペットタイプ監視
+        // アクティブペットID監視（PetCatalogから情報を取得）
         scope.launch {
             try {
-                stateSync.petTypeFlow
-                    .catch { e -> Log.e(TAG, "petTypeFlow error", e) }
-                    .collectLatest { type ->
-                        if (currentPetType != type) {
-                            currentPetType = type
-                            onPetTypeChanged?.invoke(type, currentVariation)
+                stateSync.activePetIdFlow
+                    .catch { e -> Log.e(TAG, "activePetIdFlow error", e) }
+                    .collectLatest { activePetId ->
+                        Log.d(TAG, "Active pet ID changed: $activePetId")
+                        
+                        val petEntry = activePetId?.let { com.sumika.core.model.PetCatalog.findById(it) }
+                        if (petEntry != null) {
+                            val newType = petEntry.type
+                            val newVariation = petEntry.variation
+                            
+                            if (currentPetType != newType || currentVariation != newVariation) {
+                                currentPetType = newType
+                                currentVariation = newVariation
+                                currentPetName = petEntry.defaultName
+                                onPetTypeChanged?.invoke(newType, newVariation)
+                                Log.i(TAG, "Pet changed to: ${petEntry.defaultName} ($newType variation=$newVariation)")
+                            }
                         }
                     }
             } catch (e: Exception) {
-                Log.e(TAG, "petTypeFlow collection failed", e)
+                Log.e(TAG, "activePetIdFlow collection failed", e)
             }
         }
         
-        // バリエーション監視
-        scope.launch {
-            try {
-                stateSync.petVariationFlow
-                    .catch { e -> Log.e(TAG, "petVariationFlow error", e) }
-                    .collectLatest { variation ->
-                        if (currentVariation != variation) {
-                            currentVariation = variation
-                            onPetTypeChanged?.invoke(currentPetType, variation)
-                        }
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "petVariationFlow collection failed", e)
-            }
-        }
-        
-        // ペット名監視
+        // ペット名監視（レガシーフィールド）
         scope.launch {
             try {
                 stateSync.petNameFlow

@@ -6,15 +6,21 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.sumika.core.model.GrowthStage
 import com.sumika.core.model.PetType
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val Context.petDataStore: DataStore<Preferences> by preferencesDataStore(name = "pet_state")
 
 /**
  * ペット状態の永続化
  */
-class PetStateRepository(private val context: Context) {
+@Singleton
+class PetStateRepository @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
     
     private object Keys {
         val PET_TYPE = stringPreferencesKey("pet_type")
@@ -32,6 +38,12 @@ class PetStateRepository(private val context: Context) {
         val LAST_GROWTH_CHANGE = longPreferencesKey("last_growth_change")
         val HOME_X = floatPreferencesKey("home_x")
         val HOME_Y = floatPreferencesKey("home_y")
+        
+        // 新しいキー: ペット所有管理
+        val OWNED_PET_IDS = stringSetPreferencesKey("owned_pet_ids")
+        val ACTIVE_PET_ID = stringPreferencesKey("active_pet_id")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val IS_PRO_SUBSCRIBER = booleanPreferencesKey("is_pro_subscriber")
     }
     
     /**
@@ -114,6 +126,34 @@ class PetStateRepository(private val context: Context) {
     }
     
     /**
+     * 所有ペットIDリスト
+     */
+    val ownedPetIdsFlow: Flow<Set<String>> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.OWNED_PET_IDS] ?: emptySet()
+    }
+    
+    /**
+     * アクティブペットID
+     */
+    val activePetIdFlow: Flow<String?> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.ACTIVE_PET_ID]
+    }
+    
+    /**
+     * オンボーディング完了フラグ
+     */
+    val onboardingCompletedFlow: Flow<Boolean> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.ONBOARDING_COMPLETED] ?: false
+    }
+    
+    /**
+     * Proサブスク状態
+     */
+    val isProSubscriberFlow: Flow<Boolean> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.IS_PRO_SUBSCRIBER] ?: false
+    }
+    
+    /**
      * ペットタイプを設定
      */
     suspend fun setPetType(type: PetType) {
@@ -193,21 +233,85 @@ class PetStateRepository(private val context: Context) {
     }
     
     /**
-     * ペット初期化
+     * ペット初期化（オンボーディング時）
      */
-    suspend fun initializePet(type: PetType, variation: Int, name: String) {
+    suspend fun initializePet(petId: String, name: String) {
         context.petDataStore.edit { prefs ->
-            prefs[Keys.PET_TYPE] = type.name
-            prefs[Keys.PET_VARIATION] = variation
+            // アクティブペットIDを設定
+            prefs[Keys.ACTIVE_PET_ID] = petId
+            
+            // 所有ペットに追加
+            val currentOwned = prefs[Keys.OWNED_PET_IDS] ?: emptySet()
+            prefs[Keys.OWNED_PET_IDS] = currentOwned + petId
+            
+            // レガシーフィールドも設定（互換性のため）
             prefs[Keys.PET_NAME] = name
             prefs[Keys.GROWTH_STAGE] = GrowthStage.BABY.name
             prefs[Keys.GROWTH_XP] = 0
             prefs[Keys.TOTAL_FOCUS_MINUTES] = 0
             prefs[Keys.FOCUS_SESSIONS_COUNT] = 0
-            prefs[Keys.TOTAL_PETS] = 0
-            prefs[Keys.TOTAL_FEEDS] = 0
             prefs[Keys.CREATED_AT] = System.currentTimeMillis()
             prefs[Keys.LAST_INTERACTION_AT] = System.currentTimeMillis()
+            
+            // オンボーディング完了
+            prefs[Keys.ONBOARDING_COMPLETED] = true
         }
     }
+    
+    /**
+     * ペットを所有リストに追加（購入時）
+     */
+    suspend fun addOwnedPet(petId: String) {
+        context.petDataStore.edit { prefs ->
+            val currentOwned = prefs[Keys.OWNED_PET_IDS] ?: emptySet()
+            prefs[Keys.OWNED_PET_IDS] = currentOwned + petId
+        }
+    }
+    
+    /**
+     * アクティブペットを変更
+     */
+    suspend fun setActivePet(petId: String) {
+        context.petDataStore.edit { prefs ->
+            prefs[Keys.ACTIVE_PET_ID] = petId
+        }
+    }
+    
+    /**
+     * オンボーディング完了を記録
+     */
+    suspend fun setOnboardingCompleted() {
+        context.petDataStore.edit { prefs ->
+            prefs[Keys.ONBOARDING_COMPLETED] = true
+        }
+    }
+    
+    /**
+     * Proサブスクリプション状態を設定
+     */
+    suspend fun setProSubscriber(isPro: Boolean) {
+        context.petDataStore.edit { prefs ->
+            prefs[Keys.IS_PRO_SUBSCRIBER] = isPro
+        }
+    }
+    
+    /**
+     * 指定ペットを所有しているか確認
+     */
+    suspend fun isOwned(petId: String): Boolean {
+        val owned = context.petDataStore.data.map { prefs ->
+            prefs[Keys.OWNED_PET_IDS] ?: emptySet()
+        }
+        return owned.map { it.contains(petId) }.first()
+    }
+}
+
+private suspend fun <T> Flow<T>.first(): T {
+    var result: T? = null
+    collect { value ->
+        result = value
+        return@collect
+    }
+    @Suppress("UNCHECKED_CAST")
+    return result as T
 }

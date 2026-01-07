@@ -1,32 +1,37 @@
 package com.sumika.ui.screens
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.sumika.core.model.GrowthStage
-import com.sumika.core.model.PetType
-import com.sumika.ui.components.AnimatedPetCard
-import com.sumika.ui.components.EnhancedStatsCard
+import com.sumika.ui.components.AppTopBar
+import com.sumika.ui.components.PetHeroCard
+import com.sumika.ui.components.StatusBar
+import com.sumika.ui.components.SurfaceCard
 import com.sumika.ui.theme.*
 import com.sumika.ui.viewmodel.HomeViewModel
 
+/**
+ * Home Screen - 観察体験に特化した画面設計
+ * ペットを眺める価値を最大化し、スカスカ問題を解消
+ */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
@@ -34,242 +39,211 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val scrollState = rememberScrollState()
     
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        GradientStart.copy(alpha = 0.15f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp)
-                .padding(top = 24.dp, bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // ヘッダー
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "おかえり！",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "${state.petName}が待っているよ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-                    )
-                }
-                
-                // プロフィールアイコン
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            GradientStart.copy(alpha = 0.2f),
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("👤", fontSize = 24.sp)
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(28.dp))
-            
-            // ペットカード（アニメーション付き）
-            AnimatedPetCard(
-                petType = state.petType,
-                petVariation = state.petVariation,
-                petName = state.petName,
-                growthStage = state.growthStage,
-                growthXp = state.growthXp,
-                xpToNextStage = state.xpToNextStage,
-                onPetTap = { /* TODO: ペットとのインタラクション */ }
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // 統計カード
-            EnhancedStatsCard(
-                totalFocusMinutes = state.totalFocusMinutes,
-                focusSessionsCount = state.focusSessionsCount,
-                totalXp = state.focusSessionsCount * 100 // 仮の計算
-            )
-            
-            Spacer(modifier = Modifier.height(28.dp))
-            
-            // ペット選択セクション
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "ペットを選ぶ",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                PetTypeSelector(
-                    selectedType = state.petType,
-                    selectedVariation = state.petVariation,
-                    onTypeSelected = { viewModel.setPetType(it) },
-                    onVariationSelected = { viewModel.setPetVariation(it) }
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-private fun PetTypeSelector(
-    selectedType: PetType,
-    selectedVariation: Int,
-    onTypeSelected: (PetType) -> Unit,
-    onVariationSelected: (Int) -> Unit
-) {
-    Column {
-        // ペットタイプ選択
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            PetType.entries.forEach { type ->
-                val isSelected = type == selectedType
-                PetTypeChip(
-                    petType = type,
-                    isSelected = isSelected,
-                    onClick = { onTypeSelected(type) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // カラーバリエーション
-        Text(
-            text = "カラー",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-        ) {
-            val colors = when (selectedType) {
-                PetType.CAT -> listOf(0xFF2D2D2D, 0xFFE8A87C, 0xFFF5F5F5)
-                PetType.DOG -> listOf(0xFFC4956A, 0xFF3D3D3D, 0xFFF0F0F0)
-                PetType.BIRD -> listOf(0xFFFFD93D, 0xFF6EC6FF, 0xFFFAFAFA)
-            }
-            
-            colors.forEachIndexed { index, color ->
-                val isSelected = index == selectedVariation
-                ColorChip(
-                    color = Color(color),
-                    isSelected = isSelected,
-                    onClick = { onVariationSelected(index) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PetTypeChip(
-    petType: PetType,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val emoji = when (petType) {
-        PetType.CAT -> "🐱"
-        PetType.DOG -> "🐕"
-        PetType.BIRD -> "🐦"
-    }
-    val label = when (petType) {
-        PetType.CAT -> "ねこ"
-        PetType.DOG -> "いぬ"
-        PetType.BIRD -> "とり"
+    // ペット画像のリソースIDを取得（仮のロジック）
+    val petImageResId = remember(state.petType, state.petVariation) {
+        // TODO: 実際のペット画像リソースIDを返すロジックを実装
+        android.R.drawable.ic_menu_camera
     }
     
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isSelected) GradientStart.copy(alpha = 0.15f)
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-            .border(
-                width = if (isSelected) 2.dp else 0.dp,
-                color = if (isSelected) GradientStart else Color.Transparent,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(scrollState)
+            .padding(horizontal = Spacing.md)
+            .padding(top = Spacing.lg, bottom = Spacing.md)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = emoji, fontSize = 28.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isSelected) GradientStart 
-                       else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            )
+        // Header
+        AppTopBar(
+            greeting = "おかえり！",
+            subtitle = "${state.petName}が待っているよ",
+            rightAction = {
+                // プロフィールアイコン（小さめ）
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("👤", fontSize = 20.sp)
+                }
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(Spacing.lg))
+        
+        // Hero: Pet Hero Card
+        PetHeroCard(
+            petImageResId = petImageResId,
+            petName = state.petName,
+            currentMood = determineMood(state.growthStage),
+            todayEvent = generateTodayEvent(),
+            onPat = { /* TODO: ペットなでる反応 */ },
+            onCall = { /* TODO: ペット呼ぶ反応 */ },
+            onTreat = { /* TODO: おやつ反応 */ }
+        )
+        
+        Spacer(modifier = Modifier.height(Spacing.lg))
+        
+        // Status Section
+        SurfaceCard {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.md)
+            ) {
+                Text(
+                    text = "いまの様子",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                StatusBar(
+                    icon = Icons.Default.Favorite,
+                    label = "元気",
+                    value = 0.8f,
+                    color = Error
+                )
+                
+                StatusBar(
+                    icon = Icons.Default.Star,
+                    label = "空腹",
+                    value = 0.4f,
+                    color = Warning
+                )
+                
+                StatusBar(
+                    icon = Icons.Default.CheckCircle,
+                    label = "きげん",
+                    value = 0.95f,
+                    color = Success
+                )
+            }
         }
+        
+        Spacer(modifier = Modifier.height(Spacing.lg))
+        
+        // Activity Log (ミニログ)
+        SurfaceCard {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                Text(
+                    text = "最近のできごと",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                repeat(3) { index ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    ) {
+                        Text(
+                            text = "12:${30 + index * 15}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(48.dp)
+                        )
+                        Text(
+                            text = getActivityLogItem(index),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(Spacing.lg))
+        
+        // Footer: Growth Progress (サブ情報として控えめに)
+        if (state.growthStage != com.sumika.core.model.GrowthStage.ADULT) {
+            SurfaceCard(
+                elevation = Elevation.sm
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Text(
+                        text = "成長記録",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = getStageLabel(state.growthStage),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "${state.growthXp} / ${state.xpToNextStage} XP",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(Spacing.md))
     }
 }
 
+// Helper Functions
+private fun determineMood(stage: com.sumika.core.model.GrowthStage): String {
+    return when (stage) {
+        com.sumika.core.model.GrowthStage.BABY -> "すやすや"
+        com.sumika.core.model.GrowthStage.TEEN -> "ごきげん"
+        com.sumika.core.model.GrowthStage.ADULT -> "おだやか"
+    }
+}
+
+private fun generateTodayEvent(): String {
+    val events = listOf(
+        "昼に窓辺でうとうとしてた",
+        "お気に入りの場所でリラックス中",
+        "ちょっと遊びたそう",
+        "今日はとってもおとなしい",
+        "なんだか落ち着かない様子"
+    )
+    return events.random()
+}
+
+private fun getActivityLogItem(index: Int): String {
+    val activities = listOf(
+        "水を飲んだ",
+        "おやつを食べた",
+        "お昼寝から起きた",
+        "伸びをした",
+        "窓の外を眺めていた",
+        "ちょっと遊んだ"
+    )
+    return activities.getOrNull(index) ?: activities.random()
+}
+
+private fun getStageLabel(stage: com.sumika.core.model.GrowthStage): String {
+    return when (stage) {
+        com.sumika.core.model.GrowthStage.BABY -> "子ども"
+        com.sumika.core.model.GrowthStage.TEEN -> "若者"
+        com.sumika.core.model.GrowthStage.ADULT -> "大人"
+    }
+}
+
+@Preview(showBackground = true)
 @Composable
-private fun ColorChip(
-    color: Color,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) GradientStart else Color.Gray.copy(alpha = 0.3f),
-                shape = CircleShape
-            )
-            .clickable { onClick() }
-    ) {
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(16.dp)
-                    .background(Color.White, CircleShape)
-                    .border(2.dp, GradientStart, CircleShape)
-            )
-        }
+private fun HomeScreenPreview() {
+    SumikaTheme {
+        HomeScreen()
     }
 }
