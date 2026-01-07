@@ -28,6 +28,10 @@ class PetStateRepository(private val context: Context) {
         val TOTAL_FEEDS = intPreferencesKey("total_feeds")
         val CREATED_AT = longPreferencesKey("created_at")
         val LAST_INTERACTION_AT = longPreferencesKey("last_interaction_at")
+        val IS_FOCUSING = booleanPreferencesKey("is_focusing")
+        val LAST_GROWTH_CHANGE = longPreferencesKey("last_growth_change")
+        val HOME_X = floatPreferencesKey("home_x")
+        val HOME_Y = floatPreferencesKey("home_y")
     }
     
     /**
@@ -82,6 +86,34 @@ class PetStateRepository(private val context: Context) {
     }
     
     /**
+     * 集中中かどうか
+     */
+    val isFocusingFlow: Flow<Boolean> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.IS_FOCUSING] ?: false
+    }
+    
+    /**
+     * 最後の成長段階変更時刻
+     */
+    val lastGrowthChangeFlow: Flow<Long> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.LAST_GROWTH_CHANGE] ?: 0L
+    }
+    
+    /**
+     * おうちのX座標 (0.0 - 1.0)
+     */
+    val homeXFlow: Flow<Float?> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.HOME_X]
+    }
+    
+    /**
+     * おうちのY座標 (0.0 - 1.0)
+     */
+    val homeYFlow: Flow<Float?> = context.petDataStore.data.map { prefs ->
+        prefs[Keys.HOME_Y]
+    }
+    
+    /**
      * ペットタイプを設定
      */
     suspend fun setPetType(type: PetType) {
@@ -109,6 +141,25 @@ class PetStateRepository(private val context: Context) {
     }
     
     /**
+     * 集中モードを設定
+     */
+    suspend fun setFocusing(focusing: Boolean) {
+        context.petDataStore.edit { prefs ->
+            prefs[Keys.IS_FOCUSING] = focusing
+        }
+    }
+    
+    /**
+     * おうちの位置を設定
+     */
+    suspend fun setHomePosition(x: Float, y: Float) {
+        context.petDataStore.edit { prefs ->
+            prefs[Keys.HOME_X] = x
+            prefs[Keys.HOME_Y] = y
+        }
+    }
+    
+    /**
      * 集中セッション完了時に呼び出し
      */
     suspend fun onFocusSessionCompleted(durationMinutes: Int) {
@@ -131,6 +182,9 @@ class PetStateRepository(private val context: Context) {
                 newXp >= 2000 && currentStage != GrowthStage.ADULT -> GrowthStage.ADULT
                 newXp >= 500 && currentStage == GrowthStage.BABY -> GrowthStage.TEEN
                 else -> currentStage
+            }
+            if (newStage != currentStage) {
+                prefs[Keys.LAST_GROWTH_CHANGE] = System.currentTimeMillis()
             }
             prefs[Keys.GROWTH_STAGE] = newStage.name
             

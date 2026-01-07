@@ -19,7 +19,11 @@ enum class AnimationState {
     /** 喜ぶ（撫でられた） */
     HAPPY,
     /** 遊ぶ */
-    PLAY
+    PLAY,
+    /** 集中モード */
+    FOCUS,
+    /** レベルアップ演出 */
+    LEVEL_UP
 }
 
 /**
@@ -87,6 +91,8 @@ object DefaultAnimations {
     val EAT = AnimationDef(AnimationState.EAT, frameCount = 4, frameDurationMs = 200, loop = false, nextState = AnimationState.IDLE)
     val HAPPY = AnimationDef(AnimationState.HAPPY, frameCount = 4, frameDurationMs = 150, loop = false, nextState = AnimationState.IDLE)
     val PLAY = AnimationDef(AnimationState.PLAY, frameCount = 6, frameDurationMs = 120, loop = false, nextState = AnimationState.IDLE)
+    val FOCUS = AnimationDef(AnimationState.FOCUS, frameCount = 2, frameDurationMs = 600, loop = true)
+    val LEVEL_UP = AnimationDef(AnimationState.LEVEL_UP, frameCount = 8, frameDurationMs = 100, loop = false, nextState = AnimationState.HAPPY)
     
     val ALL = mapOf(
         AnimationState.IDLE to IDLE,
@@ -95,6 +101,8 @@ object DefaultAnimations {
         AnimationState.SLEEP to SLEEP,
         AnimationState.EAT to EAT,
         AnimationState.HAPPY to HAPPY,
-        AnimationState.PLAY to PLAY
+        AnimationState.PLAY to PLAY,
+        AnimationState.FOCUS to FOCUS,
+        AnimationState.LEVEL_UP to LEVEL_UP
     )
 }

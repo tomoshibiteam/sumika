@@ -12,10 +12,10 @@ class PetBehavior(
     private val animationController: AnimationController
 ) {
     companion object {
-        private const val MOVE_SPEED = 0.15f  // 画面幅/秒
+        private const val MOVE_SPEED = 0.12f  // 画面幅/秒
         private const val ARRIVAL_THRESHOLD = 0.02f
-        private const val IDLE_ACTION_INTERVAL_MIN = 3000L  // 3秒
-        private const val IDLE_ACTION_INTERVAL_MAX = 8000L  // 8秒
+        private const val IDLE_ACTION_INTERVAL_MIN = 2000L  // 2秒
+        private const val IDLE_ACTION_INTERVAL_MAX = 5000L  // 5秒
     }
     
     // 位置（ワールド座標 0.0-1.0）
@@ -35,19 +35,34 @@ class PetBehavior(
     // 自律行動タイマー
     private var nextIdleActionTime = 0L
     
+    // おうちの位置
+    var homeX: Float? = null
+    var homeY: Float? = null
+    
+    // きょろきょろ用
+    private var isLookingAround = false
+    private var lookEndTime = 0L
+    
     /**
      * 更新（毎フレーム呼び出し）
      * @return アニメーションが自動遷移した場合true
      */
     fun update(dt: Float, currentTimeMs: Long): Boolean {
+        // きょろきょろ終了チェック
+        if (isLookingAround && currentTimeMs > lookEndTime) {
+            isLookingAround = false
+            facingRight = !facingRight
+        }
+        
         // 移動処理
         updateMovement(dt)
         
         // アニメーション更新
         val transitioned = animationController.update()
         
-        // 自律行動（IDLE時のみ）
-        if (animationController.state == AnimationState.IDLE) {
+        // 自律行動（IDLE, SIT時）
+        val currentState = animationController.state
+        if (currentState == AnimationState.IDLE || currentState == AnimationState.SIT) {
             checkIdleAction(currentTimeMs)
         }
         
@@ -144,27 +159,72 @@ class PetBehavior(
     private fun checkIdleAction(currentTimeMs: Long) {
         if (currentTimeMs < nextIdleActionTime) return
         
-        // 次のアクション時間を設定
+        // 次のアクション時間を設定（2〜5秒後）
         nextIdleActionTime = currentTimeMs + Random.nextLong(
             IDLE_ACTION_INTERVAL_MIN,
             IDLE_ACTION_INTERVAL_MAX
         )
         
-        // ランダムな行動
-        when (Random.nextInt(10)) {
-            0, 1, 2 -> {
-                // 少し移動
-                val newX = posX + Random.nextFloat() * 0.2f - 0.1f
+        // 現在座っている場合
+        if (animationController.state == AnimationState.SIT) {
+            when (Random.nextInt(4)) {
+                0, 1 -> {
+                    // 立ち上がる
+                    animationController.setState(AnimationState.IDLE)
+                }
+                2 -> {
+                    // 移動開始
+                    val newX = posX + Random.nextFloat() * 0.3f - 0.15f
+                    val newY = posY + Random.nextFloat() * 0.1f - 0.05f
+                    moveTo(newX, newY)
+                }
+                // else: 座り続ける
+            }
+            return
+        }
+        
+        // IDLE時のランダムな行動
+        when (Random.nextInt(15)) {
+            0, 1, 2, 3 -> {
+                // 移動（高確率）
+                val newX = posX + Random.nextFloat() * 0.3f - 0.15f
                 val newY = posY + Random.nextFloat() * 0.1f - 0.05f
                 moveTo(newX, newY)
             }
-            3 -> {
+            4 -> {
+                // おうちに帰る
+                val hX = homeX
+                val hY = homeY
+                if (hX != null && hY != null) {
+                    moveTo(hX, hY)
+                }
+            }
+            5, 6 -> {
                 // 座る
                 animationController.setState(AnimationState.SIT)
             }
-            // それ以外はIDLEを継続
+            6 -> {
+                // きょろきょろ（向きを変える）
+                isLookingAround = true
+                lookEndTime = currentTimeMs + Random.nextLong(500, 1500)
+                facingRight = !facingRight
+            }
+            7 -> {
+                // ちょっと遊ぶ
+                animationController.playOnce(AnimationState.PLAY)
+            }
+            8 -> {
+                // 喜ぶ
+                animationController.playOnce(AnimationState.HAPPY)
+            }
+            // 9, 10, 11: IDLEを継続（息抜き）
         }
     }
+    
+    /**
+     * きょろきょろ中かどうか
+     */
+    fun isLookingAround(): Boolean = isLookingAround
     
     /**
      * 位置を直接設定（初期化用）

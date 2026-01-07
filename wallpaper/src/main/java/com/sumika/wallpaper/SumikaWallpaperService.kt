@@ -58,6 +58,9 @@ class SumikaWallpaperService : WallpaperService() {
         private val nestRenderer = NestRenderer()
         private val backgroundRenderer = BackgroundRenderer()
         
+        // ペット状態監視
+        private var petStateObserver: PetStateObserver? = null
+        
         // 二重起動防止フラグ
         private val isDrawLoopRunning = AtomicBoolean(false)
         
@@ -108,6 +111,38 @@ class SumikaWallpaperService : WallpaperService() {
                 loadSprite(petType, petVariation)
             }
             
+            // ペット状態監視を開始
+            petStateObserver = PetStateObserver(applicationContext).apply {
+                onPetTypeChanged = { type, variation ->
+                    petType = type
+                    petVariation = variation
+                    petRenderer?.loadSprite(type, variation)
+                    Log.i(TAG, "Pet changed: $type variation=$variation")
+                }
+                onGrowthStageChanged = { stage ->
+                    // レベルアップエフェクト
+                    val screenX = offsetManager.toScreenX(petBehavior.posX, lifecycleManager.screenWidth)
+                    val screenY = offsetManager.toScreenY(petBehavior.posY, lifecycleManager.screenHeight)
+                    effectRenderer.addLevelUpEffect(screenX, screenY)
+                    animationController.setState(AnimationState.LEVEL_UP)
+                    Log.i(TAG, "Growth stage changed: $stage")
+                }
+                onFocusingChanged = { focusing ->
+                    if (focusing) {
+                        animationController.setState(AnimationState.FOCUS)
+                    } else if (animationController.state == AnimationState.FOCUS) {
+                        animationController.setState(AnimationState.IDLE)
+                    }
+                    Log.i(TAG, "Focus mode: $focusing")
+                }
+                onHomeLocationChanged = { x, y ->
+                    petBehavior.homeX = x
+                    petBehavior.homeY = y
+                    Log.i(TAG, "Home location updated: $x, $y")
+                }
+                start()
+            }
+            
             Log.i(TAG, "Engine created")
         }
         
@@ -154,6 +189,8 @@ class SumikaWallpaperService : WallpaperService() {
             Log.i(TAG, "Engine destroying...")
             stopDrawLoop()
             lifecycleManager.reset()
+            petStateObserver?.stop()
+            petStateObserver = null
             petRenderer?.release()
             petRenderer = null
             backgroundRenderer.release()
@@ -323,7 +360,9 @@ class SumikaWallpaperService : WallpaperService() {
                 petScreenX,
                 petScreenY,
                 screenWidth,
-                screenHeight
+                screenHeight,
+                petStateObserver?.currentGrowthStage ?: com.sumika.core.model.GrowthStage.BABY,
+                petStateObserver?.isFocusing ?: false
             )
             
             // エフェクト描画

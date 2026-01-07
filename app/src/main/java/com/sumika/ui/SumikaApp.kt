@@ -26,6 +26,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Home : Screen("home", "ホーム", Icons.Default.Home)
     data object Focus : Screen("focus", "集中", Icons.Default.PlayArrow)
     data object Settings : Screen("settings", "設定", Icons.Default.Settings)
+    data object HomeCalibration : Screen("home_calibration", "おうち設定", Icons.Default.Settings)
 }
 
 val bottomNavItems = listOf(Screen.Home, Screen.Focus, Screen.Settings)
@@ -67,7 +68,16 @@ fun SumikaApp() {
         ) {
             composable(Screen.Home.route) { HomeScreen() }
             composable(Screen.Focus.route) { FocusTimerScreen() }
-            composable(Screen.Settings.route) { SettingsScreen() }
+            composable(Screen.Settings.route) { 
+                SettingsScreen(
+                    onNavigateToCalibration = { navController.navigate(Screen.HomeCalibration.route) }
+                ) 
+            }
+            composable(Screen.HomeCalibration.route) {
+                com.sumika.ui.screens.HomeCalibrationScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

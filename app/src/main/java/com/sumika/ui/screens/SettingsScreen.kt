@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.sumika.wallpaper.SumikaWallpaperService
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onNavigateToCalibration: () -> Unit) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     
@@ -46,6 +46,11 @@ fun SettingsScreen() {
                 onClick = {
                     openWallpaperSettings(context)
                 }
+            )
+            SettingsItem(
+                title = "おうちの位置を設定",
+                description = "アプリアイコンの場所を指定",
+                onClick = onNavigateToCalibration
             )
         }
         

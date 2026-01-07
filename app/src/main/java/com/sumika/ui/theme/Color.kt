@@ -27,3 +27,12 @@ val Accent = Color(0xFF00D9FF)
 val Heart = Color(0xFFFF6B6B)
 val Success = Color(0xFF4ADE80)
 val Warning = Color(0xFFFBBF24)
+
+// Gradient colors
+val GradientStart = Color(0xFF6B5CE7)
+val GradientEnd = Color(0xFFFF6B9D)
+val GradientAccent = Color(0xFF00D9FF)
+
+// Glass surface
+val GlassSurface = Color(0x33FFFFFF)
+val GlassSurfaceDark = Color(0x22FFFFFF)

@@ -108,6 +108,11 @@ class FocusTimerViewModel @Inject constructor(
             isRunning = true
         )
         
+        // 集中モードを壁紙に通知
+        viewModelScope.launch {
+            repository.setFocusing(true)
+        }
+        
         val intent = Intent(context, FocusTimerService::class.java).apply {
             action = FocusTimerService.ACTION_START
             putExtra(FocusTimerService.EXTRA_DURATION_MS, durationMs)
@@ -122,6 +127,11 @@ class FocusTimerViewModel @Inject constructor(
         }
         context.startService(intent)
         
+        // 集中モードを解除
+        viewModelScope.launch {
+            repository.setFocusing(false)
+        }
+        
         _state.value = _state.value.copy(
             isRunning = false,
             remainingMs = _state.value.totalMs
@@ -131,6 +141,7 @@ class FocusTimerViewModel @Inject constructor(
     private suspend fun onTimerCompleted() {
         val durationMinutes = (_state.value.totalMs / 1000 / 60).toInt()
         repository.onFocusSessionCompleted(durationMinutes)
+        repository.setFocusing(false)
         
         _state.value = _state.value.copy(
             isRunning = false,

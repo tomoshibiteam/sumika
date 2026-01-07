@@ -37,6 +37,8 @@ class EffectRenderer {
     class FoodEffect(x: Float, y: Float) : Effect(x, y, SystemClock.elapsedRealtime(), 600L)
     class PlayEffect(x: Float, y: Float) : Effect(x, y, SystemClock.elapsedRealtime(), 500L)
     class ParticleEffect(x: Float, y: Float, val color: Int) : Effect(x, y, SystemClock.elapsedRealtime(), 400L)
+    class LevelUpEffect(x: Float, y: Float) : Effect(x, y, SystemClock.elapsedRealtime(), 1500L)
+    class FocusAuraEffect(x: Float, y: Float) : Effect(x, y, SystemClock.elapsedRealtime(), 2000L)
     
     /**
      * ♡エフェクトを追加
@@ -67,6 +69,27 @@ class EffectRenderer {
     }
     
     /**
+     * レベルアップエフェクトを追加
+     */
+    fun addLevelUpEffect(x: Float, y: Float) {
+        effects.add(LevelUpEffect(x, y))
+        // 星のパーティクルを追加
+        repeat(12) {
+            effects.add(ParticleEffect(x, y, 0xFFFFD700.toInt()))  // ゴールド
+        }
+        repeat(8) {
+            effects.add(ParticleEffect(x, y, 0xFFFF69B4.toInt()))  // ピンク
+        }
+    }
+    
+    /**
+     * 集中オーラエフェクトを追加
+     */
+    fun addFocusAura(x: Float, y: Float) {
+        effects.add(FocusAuraEffect(x, y))
+    }
+    
+    /**
      * エフェクトを描画
      */
     fun draw(canvas: Canvas) {
@@ -83,6 +106,8 @@ class EffectRenderer {
                 is FoodEffect -> drawFood(canvas, effect)
                 is PlayEffect -> drawPlay(canvas, effect)
                 is ParticleEffect -> drawParticle(canvas, effect)
+                is LevelUpEffect -> drawLevelUp(canvas, effect)
+                is FocusAuraEffect -> drawFocusAura(canvas, effect)
             }
         }
     }
@@ -180,6 +205,51 @@ class EffectRenderer {
         }
         path.close()
         canvas.drawPath(path, paint)
+    }
+    
+    private fun drawLevelUp(canvas: Canvas, effect: LevelUpEffect) {
+        val progress = effect.age
+        val alpha = ((1f - progress) * 255).toInt()
+        
+        // 回転する星
+        val starCount = 6
+        val baseRadius = 80f + progress * 40f
+        
+        heartPaint.color = 0xFFFFD700.toInt()  // ゴールド
+        heartPaint.alpha = alpha
+        
+        for (i in 0 until starCount) {
+            val angle = (progress * 360 * 2) + (i * 360f / starCount)
+            val rad = Math.toRadians(angle.toDouble())
+            val x = effect.x + (cos(rad) * baseRadius).toFloat()
+            val y = effect.y + (sin(rad) * baseRadius).toFloat() - progress * 100f
+            
+            drawStar(canvas, x, y, 15f * (1f - progress * 0.3f), 5, heartPaint)
+        }
+        
+        // 中央の光り
+        val ringAlpha = (alpha * 0.5f).toInt()
+        heartPaint.alpha = ringAlpha
+        heartPaint.style = Paint.Style.STROKE
+        heartPaint.strokeWidth = 4f
+        canvas.drawCircle(effect.x, effect.y - progress * 80f, baseRadius * 0.8f, heartPaint)
+        heartPaint.style = Paint.Style.FILL
+    }
+    
+    private fun drawFocusAura(canvas: Canvas, effect: FocusAuraEffect) {
+        val progress = effect.age
+        val pulseProgress = (progress * 3) % 1f  // 複数回脈動
+        val alpha = ((1f - pulseProgress) * 100).toInt()
+        
+        heartPaint.color = 0xFF87CEEB.toInt()  // スカイブルー
+        heartPaint.alpha = alpha
+        heartPaint.style = Paint.Style.STROKE
+        heartPaint.strokeWidth = 3f
+        
+        val radius = 60f + pulseProgress * 40f
+        canvas.drawCircle(effect.x, effect.y, radius, heartPaint)
+        
+        heartPaint.style = Paint.Style.FILL
     }
     
     /**
